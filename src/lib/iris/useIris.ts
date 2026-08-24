@@ -183,13 +183,14 @@ export function useIris() {
     () => ({
       notes,
       reminders,
+      ownerName: settings.ownerName,
       addNote: (text: string) => setNotes((n) => [text, ...n]),
       addTimer: (label: string, seconds: number) =>
         setTimers((t) => [...t, { id: uid(), label, endsAt: Date.now() + seconds * 1000 }]),
       addReminder: (text: string, dueAt: number) =>
         setReminders((r) => [...r, { id: uid(), text, dueAt, done: false }]),
     }),
-    [notes, reminders],
+    [notes, reminders, settings.ownerName],
   );
 
   const scheduleSleep = useCallback(() => {
@@ -328,9 +329,10 @@ export function useIris() {
       if (Date.now() - greetedRef.current > 600000) {
         greetedRef.current = Date.now();
         log("info", "greeting", settingsRef.current.ownerName);
+        speak(greeting());
       }
     }, 480);
-  }, [log, scheduleSleep]);
+  }, [greeting, log, scheduleSleep, speak]);
 
   // ---- speech recognition: wake scoring + dictation ----
   useEffect(() => {
