@@ -42,9 +42,11 @@ export const skills: Skill[] = [
     ],
     match: (u) => {
       const m = u.match(/timer.*?(\d+|\w+)\s*(second|minute|hour)/i) ?? u.match(/(\d+|\w+)\s*(second|minute|hour).*timer/i);
-      return m ? { amount: m[1], unit: m[2] } : null;
+      return m ? { amount: m[1] ?? "1", unit: m[2] ?? "minute" } : null;
     },
-    run: ({ amount, unit }, ctx) => {
+    run: (args, ctx) => {
+      const amount = args.amount ?? "1";
+      const unit = args.unit ?? "minute";
       const n = num(amount);
       const mult = unit.startsWith("hour") ? 3600 : unit.startsWith("minute") ? 60 : 1;
       const seconds = n * mult;
@@ -60,9 +62,10 @@ export const skills: Skill[] = [
     examples: ["remember that the wifi password is bluebird", "write a note: call mum", "take a note about groceries"],
     match: (u) => {
       const m = u.match(/(?:remember that|note that|write a note[:,]?|take a note[:,]?|make a note[:,]?)\s+(.*)/i);
-      return m ? { text: m[1] } : null;
+      return m ? { text: m[1] ?? "" } : null;
     },
-    run: ({ text }, ctx) => {
+    run: (args, ctx) => {
+      const text = args.text ?? "";
       ctx.addNote(text);
       return { reply: `Noted: ${text}` };
     },
@@ -76,7 +79,7 @@ export const skills: Skill[] = [
     match: (u) => (/(my notes|what do you remember|read.*notes)/i.test(u) ? {} : null),
     run: (_a, ctx) =>
       ctx.notes.length
-        ? { reply: `You have ${ctx.notes.length} note${ctx.notes.length === 1 ? "" : "s"}. Most recent: ${ctx.notes[0]}` }
+        ? { reply: `You have ${ctx.notes.length} note${ctx.notes.length === 1 ? "" : "s"}. Most recent: ${ctx.notes[0] ?? ""}` }
         : { reply: "No notes stored yet." },
   },
   {
@@ -87,10 +90,10 @@ export const skills: Skill[] = [
     examples: ["turn on the living room lights", "turn off the lamp", "switch off the kitchen plug"],
     match: (u) => {
       const m = u.match(/turn (on|off)\s+(?:the\s+)?(.+)/i) ?? u.match(/switch (on|off)\s+(?:the\s+)?(.+)/i);
-      return m ? { action: m[1].toLowerCase(), device: m[2] } : null;
+      return m ? { action: (m[1] ?? "on").toLowerCase(), device: m[2] ?? "device" } : null;
     },
-    run: ({ action, device }) => ({
-      reply: `Ready to turn ${action} the ${device}. Confirm and I'll send it to the smart home adapter.`,
+    run: (args) => ({
+      reply: `Ready to turn ${args.action} the ${args.device}. Confirm and I'll send it to the smart home adapter.`,
     }),
   },
   {
@@ -101,11 +104,12 @@ export const skills: Skill[] = [
     examples: ["search for oat milk recipes", "look up the weather in Warsaw", "google tanstack start"],
     match: (u) => {
       const m = u.match(/(?:search for|look up|google)\s+(.*)/i);
-      return m ? { query: m[1] } : null;
+      return m ? { query: m[1] ?? "" } : null;
     },
-    run: ({ query }) => ({
-      reply: `Opening a read-only search for "${query}".`,
-      effect: () => window.open(`https://duckduckgo.com/?q=${encodeURIComponent(query)}`, "_blank", "noopener"),
+    run: (args) => ({
+      // eslint-disable-next-line
+      reply: `Opening a read-only search for "${args.query ?? ""}".`,
+      effect: () => window.open(`https://duckduckgo.com/?q=${encodeURIComponent(args.query ?? "")}`, "_blank", "noopener"),
     }),
   },
   {

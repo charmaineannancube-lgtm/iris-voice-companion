@@ -15,7 +15,7 @@ export interface LogEntry {
   at: string;
   level: "info" | "warn" | "error";
   event: string;
-  detail?: string;
+  detail?: string | undefined;
 }
 
 export interface Timer {
@@ -248,7 +248,7 @@ export function useIris() {
         setTimers((t) => t.filter((x) => x.endsAt > now));
         due.forEach((t) => log("info", "timer.fired", t.label));
         if (stateRef.current === "hidden") setState("listening");
-        speak(`Your ${due[0].label} timer is done.`);
+        speak(`Your ${due[0]?.label ?? ""} timer is done.`);
       }
     }, 500);
     return () => clearInterval(i);
