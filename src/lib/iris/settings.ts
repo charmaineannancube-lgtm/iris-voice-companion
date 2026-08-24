@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 export interface IrisSettings {
+  ownerName: string;
   wakeWord: string;
   /** 0 = strict (few false positives), 1 = permissive */
   sensitivity: number;
@@ -8,7 +9,10 @@ export interface IrisSettings {
   testMode: boolean;
   pttMode: "click" | "hold" | "off";
   voiceURI: string;
+  /** "" = auto-pick a deep British voice */
   rate: number;
+  pitch: number;
+  bargeIn: boolean;
   sleepTimeoutSec: number;
   redactEmails: boolean;
   redactNumbers: boolean;
@@ -18,12 +22,15 @@ export interface IrisSettings {
 }
 
 export const DEFAULT_SETTINGS: IrisSettings = {
+  ownerName: "Anna",
   wakeWord: "hey iris",
   sensitivity: 0.45,
   testMode: false,
   pttMode: "click",
   voiceURI: "",
-  rate: 1.03,
+  rate: 0.96,
+  pitch: 0.72,
+  bargeIn: true,
   sleepTimeoutSec: 12,
   redactEmails: true,
   redactNumbers: true,

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { ParticleAvatar } from "@/components/iris/ParticleAvatar";
-import { useIris } from "@/lib/iris/useIris";
+import { useIris, pickButlerVoice } from "@/lib/iris/useIris";
 import { resetSettings } from "@/lib/iris/settings";
 import { thresholdFor } from "@/lib/iris/wake";
 
@@ -80,6 +80,9 @@ function SettingsPage() {
           <div className="grid gap-6">
             <section className="rounded-xl border border-border bg-card px-5 py-2">
               <h2 className="py-4 text-xs uppercase tracking-[0.3em] text-iris-dim">Wake word</h2>
+              <Row label="Your name" hint="Iris greets you by name and answers “who am I”.">
+                <Input value={s.ownerName} onChange={(e) => set({ ownerName: e.target.value })} />
+              </Row>
               <Row label="Wake phrase" hint="What Iris listens for while idle.">
                 <Input
                   value={s.wakeWord}
@@ -150,13 +153,16 @@ function SettingsPage() {
 
             <section className="rounded-xl border border-border bg-card px-5 py-2">
               <h2 className="py-4 text-xs uppercase tracking-[0.3em] text-iris-dim">Voice</h2>
-              <Row label="Speaking voice" hint="Voices come from your operating system.">
+              <Row
+                label="Speaking voice"
+                hint="Auto picks the deepest British voice your system offers."
+              >
                 <select
                   value={s.voiceURI}
                   onChange={(e) => set({ voiceURI: e.target.value })}
                   className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground"
                 >
-                  <option value="">System default</option>
+                  <option value="">Auto — deep British</option>
                   {iris.voices.map((v) => (
                     <option key={v.voiceURI} value={v.voiceURI}>
                       {v.name} ({v.lang})
@@ -176,17 +182,41 @@ function SettingsPage() {
                   <span className="w-10 text-right text-xs text-primary">{s.rate.toFixed(2)}x</span>
                 </div>
               </Row>
+              <Row label="Pitch" hint="Lower is deeper. 0.7 gives the butler register.">
+                <div className="flex items-center gap-3">
+                  <Slider
+                    value={[s.pitch]}
+                    min={0.4}
+                    max={1.4}
+                    step={0.01}
+                    onValueChange={([v]) => set({ pitch: v ?? 0.72 })}
+                  />
+                  <span className="w-10 text-right text-xs text-primary">{s.pitch.toFixed(2)}</span>
+                </div>
+              </Row>
+              <Row
+                label="Barge-in"
+                hint="Speak over Iris to cut her off mid-sentence — no button required."
+              >
+                <div className="flex justify-end">
+                  <Switch checked={s.bargeIn} onCheckedChange={(v) => set({ bargeIn: v })} />
+                </div>
+              </Row>
               <Row label="Test voice">
                 <Button
                   variant="outline"
                   className="w-full"
                   onClick={() => {
                     const u = new SpeechSynthesisUtterance(
-                      "This is how I sound. Say the wake word whenever you need me.",
+                      `Good evening, ${s.ownerName || "there"}. Everything is running smoothly. Say the wake word whenever you need me.`,
                     );
-                    const v = window.speechSynthesis.getVoices().find((x) => x.voiceURI === s.voiceURI);
+                    const all = window.speechSynthesis.getVoices();
+                    const v = s.voiceURI
+                      ? all.find((x) => x.voiceURI === s.voiceURI)
+                      : pickButlerVoice(all);
                     if (v) u.voice = v;
                     u.rate = s.rate;
+                    u.pitch = s.pitch;
                     window.speechSynthesis.cancel();
                     window.speechSynthesis.speak(u);
                   }}

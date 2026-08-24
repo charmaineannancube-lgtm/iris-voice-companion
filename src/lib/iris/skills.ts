@@ -19,6 +19,7 @@ export interface SkillContext {
   addTimer: (label: string, seconds: number) => void;
   addNote: (text: string) => void;
   addReminder: (text: string, dueAt: number) => void;
+  ownerName: string;
   notes: string[];
   reminders: { text: string; dueAt: number; done: boolean }[];
 }
@@ -32,6 +33,23 @@ const num = (word: string): number => {
 };
 
 export const skills: Skill[] = [
+  {
+    id: "identity",
+    name: "Who am I",
+    description: "Recognises the owner and answers questions about identity.",
+    sensitivity: "safe",
+    examples: ["who am I", "what's my name", "do you know me", "who are you"],
+    match: (u) =>
+      /(who am i|what'?s my name|do you know (me|who i am)|who are you|introduce yourself)/i.test(u)
+        ? { self: /(who are you|introduce yourself)/i.test(u) ? "iris" : "owner" }
+        : null,
+    run: (args, ctx) =>
+      args['self'] === "iris"
+        ? {
+            reply: `I'm Iris — your assistant, ${ctx.ownerName}. Wake word, skills and memory, all running on this device.`,
+          }
+        : { reply: `You're ${ctx.ownerName}. I'd know your voice anywhere.` },
+  },
   {
     id: "timer",
     name: "Timers",
