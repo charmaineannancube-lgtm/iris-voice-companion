@@ -45,7 +45,7 @@ export function Dashboard({ iris }: { iris: ReturnType<typeof useIris> }) {
                 </p>
                 <p className="text-xs text-muted-foreground">{s.examples[0]}</p>
               </div>
-              <Switch checked={iris.enabled[s.id]} onCheckedChange={() => iris.toggleSkill(s.id)} />
+              <Switch checked={iris.enabled[s.id] ?? true} onCheckedChange={() => iris.toggleSkill(s.id)} />
             </div>
           ))}
         </div>

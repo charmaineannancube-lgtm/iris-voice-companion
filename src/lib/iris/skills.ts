@@ -45,8 +45,8 @@ export const skills: Skill[] = [
       return m ? { amount: m[1] ?? "1", unit: m[2] ?? "minute" } : null;
     },
     run: (args, ctx) => {
-      const amount = args.amount ?? "1";
-      const unit = args.unit ?? "minute";
+      const amount = args['amount'] ?? "1";
+      const unit = args['unit'] ?? "minute";
       const n = num(amount);
       const mult = unit.startsWith("hour") ? 3600 : unit.startsWith("minute") ? 60 : 1;
       const seconds = n * mult;
@@ -65,7 +65,7 @@ export const skills: Skill[] = [
       return m ? { text: m[1] ?? "" } : null;
     },
     run: (args, ctx) => {
-      const text = args.text ?? "";
+      const text = args['text'] ?? "";
       ctx.addNote(text);
       return { reply: `Noted: ${text}` };
     },
@@ -93,7 +93,7 @@ export const skills: Skill[] = [
       return m ? { action: (m[1] ?? "on").toLowerCase(), device: m[2] ?? "device" } : null;
     },
     run: (args) => ({
-      reply: `Ready to turn ${args.action} the ${args.device}. Confirm and I'll send it to the smart home adapter.`,
+      reply: `Ready to turn ${args['action']} the ${args['device']}. Confirm and I'll send it to the smart home adapter.`,
     }),
   },
   {
@@ -108,8 +108,8 @@ export const skills: Skill[] = [
     },
     run: (args) => ({
       // eslint-disable-next-line
-      reply: `Opening a read-only search for "${args.query ?? ""}".`,
-      effect: () => window.open(`https://duckduckgo.com/?q=${encodeURIComponent(args.query ?? "")}`, "_blank", "noopener"),
+      reply: `Opening a read-only search for "${args['query'] ?? ""}".`,
+      effect: () => window.open(`https://duckduckgo.com/?q=${encodeURIComponent(args['query'] ?? "")}`, "_blank", "noopener"),
     }),
   },
   {
