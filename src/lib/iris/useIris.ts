@@ -49,6 +49,31 @@ interface Pending {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+/** Prefer a deep British male voice — the "digital butler" register. */
+const BRITISH_PREFERENCE = [
+  "google uk english male",
+  "microsoft ryan",
+  "microsoft george",
+  "microsoft thomas",
+  "daniel",
+  "arthur",
+  "oliver",
+];
+
+export function pickButlerVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
+  const byName = (needle: string) =>
+    voices.find((v) => v.name.toLowerCase().includes(needle) && v.lang.toLowerCase().startsWith("en"));
+  for (const n of BRITISH_PREFERENCE) {
+    const hit = byName(n);
+    if (hit) return hit;
+  }
+  return (
+    voices.find((v) => v.lang.toLowerCase() === "en-gb") ??
+    voices.find((v) => v.lang.toLowerCase().startsWith("en-g")) ??
+    voices.find((v) => v.lang.toLowerCase().startsWith("en"))
+  );
+}
+
 function persisted<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -202,8 +227,11 @@ export function useIris() {
       synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.rate = settingsRef.current.rate;
-      u.pitch = 1.02;
-      const chosen = synth.getVoices().find((v) => v.voiceURI === settingsRef.current.voiceURI);
+      u.pitch = settingsRef.current.pitch;
+      const all = synth.getVoices();
+      const chosen = settingsRef.current.voiceURI
+        ? all.find((v) => v.voiceURI === settingsRef.current.voiceURI)
+        : pickButlerVoice(all);
       if (chosen) u.voice = chosen;
       // Amplitude-approximated lip sync: the Web Speech API exposes no visemes.
       const mouthLoop = setInterval(() => setMouth(Math.random() * 0.85 + 0.15), 90);
@@ -281,14 +309,28 @@ export function useIris() {
     speak("Cancelled.");
   }, [log, pending, speak]);
 
+  const greetedRef = useRef(0);
+
+  const greeting = useCallback(() => {
+    const name = settingsRef.current.ownerName.trim();
+    const h = new Date().getHours();
+    const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+    return name ? `${part}, ${name}.` : `${part}.`;
+  }, []);
+
   const wake = useCallback(() => {
     if (stateRef.current === "muted") return;
     setState("building");
     window.setTimeout(() => {
       setState("listening");
       scheduleSleep();
+      // Greet at most once every 10 minutes so it stays a butler, not a parrot.
+      if (Date.now() - greetedRef.current > 600000) {
+        greetedRef.current = Date.now();
+        log("info", "greeting", settingsRef.current.ownerName);
+      }
     }, 480);
-  }, [scheduleSleep]);
+  }, [log, scheduleSleep]);
 
   // ---- speech recognition: wake scoring + dictation ----
   useEffect(() => {
@@ -332,9 +374,22 @@ export function useIris() {
         return;
       }
 
-      if (stateRef.current === "speaking" && /\bstop\b/.test(heard)) {
-        stopSpeaking();
-        return;
+      if (stateRef.current === "speaking") {
+        // Natural barge-in: any confident speech cuts Iris off mid-sentence.
+        const words = heard.trim().split(/\s+/).filter(Boolean);
+        const isCommand = /\b(stop|wait|hold on|shut up|quiet|enough|nevermind|never mind)\b/.test(heard);
+        if (s.bargeIn && (isCommand || words.length >= 2)) {
+          log("warn", "tts.bargein", heard);
+          stopSpeaking();
+          if (!isCommand && res.isFinal) {
+            window.setTimeout(() => handleUtterance(heard), 220);
+          }
+          return;
+        }
+        if (isCommand) {
+          stopSpeaking();
+          return;
+        }
       }
       if (res.isFinal && stateRef.current === "listening") {
         const { score, remainder } = scoreWake(heard, s.wakeWord);
