@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Avatar } from "@/components/iris/Avatar";
+import { ParticleAvatar } from "@/components/iris/ParticleAvatar";
 import { Dashboard } from "@/components/iris/Dashboard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ function IrisPage() {
   const iris = useIris();
   const [typed, setTyped] = useState("");
 
-  const pushToTalk = () => {
+  const summon = () => {
     if (iris.state === "hidden" || iris.state === "muted") iris.wake();
   };
 
@@ -54,23 +54,34 @@ function IrisPage() {
               Iris<span className="text-primary">.</span>
             </h1>
             <p className="text-sm text-muted-foreground">
-              Wake word “{iris.wakeWord}” · push-to-talk fallback · local skills
+              Always listening for “{iris.settings.wakeWord}” · local skills · private by default
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={pushToTalk}>Push to talk</Button>
+            {iris.settings.pttMode !== "off" && (
+              <Button
+                onClick={iris.settings.pttMode === "click" ? summon : undefined}
+                onPointerDown={iris.settings.pttMode === "hold" ? summon : undefined}
+                onPointerUp={iris.settings.pttMode === "hold" ? iris.toggleMute : undefined}
+              >
+                {iris.settings.pttMode === "hold" ? "Hold to talk" : "Summon"}
+              </Button>
+            )}
             <Button variant="outline" onClick={iris.stopSpeaking}>
               Stop
             </Button>
             <Button variant="secondary" onClick={iris.toggleMute}>
               {iris.state === "muted" ? "Wake" : "Sleep"}
             </Button>
+            <Link to="/settings">
+              <Button variant="ghost">Settings</Button>
+            </Link>
           </div>
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           <div className="rounded-2xl border border-border bg-card/40 p-4">
-            <Avatar state={iris.state} mouth={iris.mouth} />
+            <ParticleAvatar state={iris.state} mouth={iris.mouth} />
             <form onSubmit={submit} className="mt-4 flex gap-2">
               <Input
                 value={typed}

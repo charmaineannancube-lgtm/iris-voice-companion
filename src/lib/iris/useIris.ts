@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { route, skills, type Skill } from "./skills";
+import { getSettings, setSettings, useSettings, applyTheme } from "./settings";
+import { scoreWake, thresholdFor } from "./wake";
 
 export type IrisState =
   | "hidden"
@@ -24,6 +26,22 @@ export interface Timer {
   endsAt: number;
 }
 
+export interface Reminder {
+  id: string;
+  text: string;
+  dueAt: number;
+  done: boolean;
+}
+
+export interface Detection {
+  id: string;
+  at: string;
+  heard: string;
+  score: number;
+  threshold: number;
+  fired: boolean;
+}
+
 interface Pending {
   skill: Skill;
   args: Record<string, string>;
@@ -31,50 +49,144 @@ interface Pending {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+function persisted<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function save(key: string, value: unknown) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage disabled */
+  }
+}
+
+const K = {
+  logs: "iris.logs.v1",
+  notes: "iris.notes.v1",
+  timers: "iris.timers.v1",
+  reminders: "iris.reminders.v1",
+  skills: "iris.skills.v1",
+  convo: "iris.convo.v1",
+};
+
 export function useIris() {
+  const settings = useSettings();
+
   const [state, setState] = useState<IrisState>("hidden");
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [notes, setNotes] = useState<string[]>([]);
   const [timers, setTimers] = useState<Timer[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [detections, setDetections] = useState<Detection[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [wakeWord, setWakeWord] = useState("hey iris");
-  const [wakeEnabled, setWakeEnabled] = useState(false);
   const [mouth, setMouth] = useState(0);
   const [supported, setSupported] = useState(true);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(skills.map((s) => [s.id, true])),
+  const [micDenied, setMicDenied] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [enabled, setEnabledState] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(skills.map((s) => [s.id, true])),
   );
 
-  const recognitionRef = useRef<any>(null);
   const sleepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef<IrisState>("hidden");
+  const settingsRef = useRef(settings);
   stateRef.current = state;
+  settingsRef.current = settings;
+
+  // ---- hydrate persisted state (client only, avoids SSR mismatch) ----
+  useEffect(() => {
+    setLogs(persisted<LogEntry[]>(K.logs, []));
+    setNotes(persisted<string[]>(K.notes, []));
+    setTimers(persisted<Timer[]>(K.timers, []));
+    setReminders(persisted<Reminder[]>(K.reminders, []));
+    const conv = persisted<{ transcript: string; reply: string }>(K.convo, {
+      transcript: "",
+      reply: "",
+    });
+    setTranscript(conv.transcript);
+    setReply(conv.reply);
+    setEnabledState((e) => ({ ...e, ...persisted<Record<string, boolean>>(K.skills, {}) }));
+    applyTheme(getSettings());
+    setHydrated(true);
+  }, []);
+
+  // ---- persist ----
+  useEffect(() => {
+    if (hydrated) save(K.logs, logs);
+  }, [hydrated, logs]);
+  useEffect(() => {
+    if (hydrated) save(K.notes, notes);
+  }, [hydrated, notes]);
+  useEffect(() => {
+    if (hydrated) save(K.timers, timers);
+  }, [hydrated, timers]);
+  useEffect(() => {
+    if (hydrated) save(K.reminders, reminders);
+  }, [hydrated, reminders]);
+  useEffect(() => {
+    if (hydrated) save(K.skills, enabled);
+  }, [hydrated, enabled]);
+  useEffect(() => {
+    if (hydrated) save(K.convo, { transcript, reply });
+  }, [hydrated, transcript, reply]);
+
+  // ---- retention pruning ----
+  useEffect(() => {
+    if (!hydrated) return;
+    const cutoff = Date.now() - settings.retentionDays * 86400000;
+    setLogs((l) => l.filter((e) => new Date(e.at).getTime() >= cutoff));
+  }, [hydrated, settings.retentionDays]);
 
   const log = useCallback((level: LogEntry["level"], event: string, detail?: string) => {
     setLogs((l) =>
-      [{ id: uid(), at: new Date().toISOString(), level, event, detail }, ...l].slice(0, 200),
+      [{ id: uid(), at: new Date().toISOString(), level, event, detail }, ...l].slice(0, 500),
     );
   }, []);
 
   const ctx = useMemo(
     () => ({
       notes,
+      reminders,
       addNote: (text: string) => setNotes((n) => [text, ...n]),
       addTimer: (label: string, seconds: number) =>
         setTimers((t) => [...t, { id: uid(), label, endsAt: Date.now() + seconds * 1000 }]),
+      addReminder: (text: string, dueAt: number) =>
+        setReminders((r) => [...r, { id: uid(), text, dueAt, done: false }]),
     }),
-    [notes],
+    [notes, reminders],
   );
 
   const scheduleSleep = useCallback(() => {
     if (sleepTimer.current) clearTimeout(sleepTimer.current);
-    sleepTimer.current = setTimeout(() => {
-      setState("hidden");
-      log("info", "avatar.dissolve", "idle timeout");
-    }, 12000);
+    sleepTimer.current = setTimeout(
+      () => {
+        setState("hidden");
+        log("info", "avatar.dissolve", "idle timeout");
+      },
+      Math.max(3, settingsRef.current.sleepTimeoutSec) * 1000,
+    );
   }, [log]);
+
+  // ---- voices ----
+  useEffect(() => {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+    if (!synth) return;
+    const read = () => setVoices(synth.getVoices());
+    read();
+    synth.addEventListener("voiceschanged", read);
+    return () => synth.removeEventListener("voiceschanged", read);
+  }, []);
 
   const speak = useCallback(
     (text: string) => {
@@ -89,9 +201,11 @@ export function useIris() {
       }
       synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.03;
-      u.pitch = 1.05;
-      // Amplitude-approximated lip sync: TTS here exposes no visemes.
+      u.rate = settingsRef.current.rate;
+      u.pitch = 1.02;
+      const chosen = synth.getVoices().find((v) => v.voiceURI === settingsRef.current.voiceURI);
+      if (chosen) u.voice = chosen;
+      // Amplitude-approximated lip sync: the Web Speech API exposes no visemes.
       const mouthLoop = setInterval(() => setMouth(Math.random() * 0.85 + 0.15), 90);
       const done = () => {
         clearInterval(mouthLoop);
@@ -131,8 +245,7 @@ export function useIris() {
           return;
         }
         if (hit.skill.id === "sleep") {
-          const r = hit.skill.run(hit.args, ctx);
-          setReply(r.reply);
+          setReply(hit.skill.run(hit.args, ctx).reply);
           log("info", "avatar.dissolve", "user dismissed");
           setState("hidden");
           return;
@@ -170,100 +283,135 @@ export function useIris() {
 
   const wake = useCallback(() => {
     if (stateRef.current === "muted") return;
-    log("info", "wake.detected", wakeWord);
     setState("building");
     window.setTimeout(() => {
       setState("listening");
-      log("info", "avatar.listening");
       scheduleSleep();
     }, 480);
-  }, [log, scheduleSleep, wakeWord]);
+  }, [scheduleSleep]);
 
-  // Speech recognition: wake word + dictation on one continuous stream.
+  // ---- speech recognition: wake scoring + dictation ----
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !hydrated) return;
     const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     if (!SR) {
       setSupported(false);
-      return;
-    }
-    if (!wakeEnabled) {
-      recognitionRef.current?.stop?.();
-      recognitionRef.current = null;
       return;
     }
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
+    let stopped = false;
+
     rec.onresult = (e: any) => {
       const res = e.results[e.resultIndex];
-      const text: string = res[0].transcript.toLowerCase();
+      const heard: string = res[0].transcript.toLowerCase();
+      const s = settingsRef.current;
+
       if (stateRef.current === "hidden" || stateRef.current === "muted") {
-        if (res.isFinal && text.includes(wakeWord)) {
-          const after = text.split(wakeWord)[1]?.trim();
-          wake();
-          if (after) window.setTimeout(() => handleUtterance(after), 520);
+        if (!res.isFinal) return;
+        const { score, remainder } = scoreWake(heard, s.wakeWord);
+        const threshold = thresholdFor(s.sensitivity);
+        const fired = score >= threshold && stateRef.current !== "muted";
+        if (s.testMode || fired) {
+          setDetections((d) =>
+            [
+              { id: uid(), at: new Date().toISOString(), heard, score, threshold, fired },
+              ...d,
+            ].slice(0, 40),
+          );
         }
+        if (!fired) {
+          if (score > threshold - 0.2) log("warn", "wake.rejected", `${heard} (${score.toFixed(2)})`);
+          return;
+        }
+        log("info", "wake.detected", `${heard} · confidence ${score.toFixed(2)}`);
+        wake();
+        if (remainder) window.setTimeout(() => handleUtterance(remainder), 520);
         return;
       }
-      if (stateRef.current === "speaking" && /\bstop\b/.test(text)) {
+
+      if (stateRef.current === "speaking" && /\bstop\b/.test(heard)) {
         stopSpeaking();
         return;
       }
       if (res.isFinal && stateRef.current === "listening") {
-        handleUtterance(text.replace(wakeWord, "").trim());
+        const { score, remainder } = scoreWake(heard, s.wakeWord);
+        handleUtterance(score >= thresholdFor(s.sensitivity) ? remainder || heard : heard);
       }
     };
-    rec.onerror = (e: any) => log("error", "stt.error", e?.error ?? "unknown");
+
+    rec.onerror = (e: any) => {
+      const err = e?.error ?? "unknown";
+      if (err === "not-allowed" || err === "service-not-allowed") setMicDenied(true);
+      if (err !== "no-speech") log("error", "stt.error", err);
+    };
     rec.onend = () => {
-      if (wakeEnabled) {
+      if (!stopped) {
         try {
           rec.start();
         } catch {
-          /* already started */
+          /* already running */
         }
       }
     };
     try {
       rec.start();
-      log("info", "wake.listening", `"${wakeWord}"`);
+      log("info", "wake.listening", `"${settingsRef.current.wakeWord}"`);
     } catch {
       /* noop */
     }
-    recognitionRef.current = rec;
     return () => {
+      stopped = true;
       rec.onend = null;
       rec.stop();
     };
-  }, [handleUtterance, log, stopSpeaking, wake, wakeEnabled, wakeWord]);
+  }, [handleUtterance, hydrated, log, stopSpeaking, wake]);
 
-  // Timer completion
+  // ---- timers + reminders due ----
   useEffect(() => {
-    if (!timers.length) return;
     const i = setInterval(() => {
       const now = Date.now();
-      const due = timers.filter((t) => t.endsAt <= now);
-      if (due.length) {
+      const dueTimers = timers.filter((t) => t.endsAt <= now);
+      if (dueTimers.length) {
         setTimers((t) => t.filter((x) => x.endsAt > now));
-        due.forEach((t) => log("info", "timer.fired", t.label));
+        dueTimers.forEach((t) => log("info", "timer.fired", t.label));
         if (stateRef.current === "hidden") setState("listening");
-        speak(`Your ${due[0]?.label ?? ""} timer is done.`);
+        speak(`Your ${dueTimers[0]?.label ?? ""} timer is done.`);
+        return;
       }
-    }, 500);
+      const dueRem = reminders.find((r) => !r.done && r.dueAt <= now);
+      if (dueRem) {
+        setReminders((r) => r.map((x) => (x.id === dueRem.id ? { ...x, done: true } : x)));
+        log("info", "reminder.fired", dueRem.text);
+        if (stateRef.current === "hidden") setState("listening");
+        speak(`Reminder: ${dueRem.text}`);
+      }
+    }, 1000);
     return () => clearInterval(i);
-  }, [log, speak, timers]);
+  }, [log, reminders, speak, timers]);
 
-  const toggleSkill = (id: string) => setEnabled((e) => ({ ...e, [id]: !e[id] }));
+  const toggleSkill = (id: string) => setEnabledState((e) => ({ ...e, [id]: !e[id] }));
+
   const clearData = () => {
     setLogs([]);
     setNotes([]);
     setTimers([]);
+    setReminders([]);
+    setDetections([]);
     setTranscript("");
     setReply("");
+    Object.values(K).forEach((k) => window.localStorage.removeItem(k));
+    log("warn", "privacy.cleared", "all local data removed");
   };
+
   const toggleMute = () =>
-    setState((s) => (s === "muted" ? "hidden" : (window.speechSynthesis?.cancel(), "muted")));
+    setState((s) => {
+      if (s === "muted") return "hidden";
+      window.speechSynthesis?.cancel();
+      return "muted";
+    });
 
   return {
     state,
@@ -273,14 +421,17 @@ export function useIris() {
     logs,
     notes,
     timers,
+    reminders,
+    detections,
+    clearDetections: () => setDetections([]),
     pending,
     enabled,
     toggleSkill,
-    wakeWord,
-    setWakeWord,
-    wakeEnabled,
-    setWakeEnabled,
+    settings,
+    updateSettings: setSettings,
+    voices,
     supported,
+    micDenied,
     mouth,
     wake,
     handleUtterance,
