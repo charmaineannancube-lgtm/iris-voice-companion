@@ -104,10 +104,10 @@ export function ParticleAvatar({ state, mouth }: { state: IrisState; mouth: numb
       let z = r * Math.sin(theta);
 
       // sculpt: narrower jaw, taller cranium, flatter back
-      const jaw = 1 - Math.max(0, y) * 0.42;
-      x *= 0.74 * jaw;
-      z *= 0.78 * jaw;
-      y *= 1.02;
+      const jaw = 1 - Math.max(0, y) * 0.26 - Math.max(0, y - 0.6) * 0.5;
+      x *= 0.82 * jaw;
+      z *= 0.84 * jaw;
+      y *= 0.98;
       if (z < 0) z *= 0.8;
 
       const kind = classify(x, y, z);
@@ -123,7 +123,7 @@ export function ParticleAvatar({ state, mouth }: { state: IrisState; mouth: numb
         y: Math.random() * h,
         vx: 0,
         vy: 0,
-        size: kind === 1 ? 1.5 : 0.9 + Math.random() * 0.7,
+        size: kind === 1 ? 1.7 : 0.85 + Math.random() * 0.65,
         bright: kind === 1 ? 1 : 0.35 + Math.random() * 0.45,
         seed: Math.random() * Math.PI * 2,
         feature: kind,
