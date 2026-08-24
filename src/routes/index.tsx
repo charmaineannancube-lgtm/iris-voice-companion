@@ -1,24 +1,88 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { Avatar } from "@/components/iris/Avatar";
+import { Dashboard } from "@/components/iris/Dashboard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useIris } from "@/lib/iris/useIris";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Iris — Voice Assistant with a Humanoid Avatar" },
+      {
+        name: "description",
+        content:
+          "Iris is a wake-word voice assistant with an animated humanoid avatar, skills registry, live logs and a dark pink control dashboard.",
+      },
+      { property: "og:title", content: "Iris — Voice Assistant with a Humanoid Avatar" },
+      {
+        property: "og:description",
+        content:
+          "Wake word, push-to-talk, timers, notes, smart home and web search — driven by an avatar that materializes when you call it.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: IrisPage,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function IrisPage() {
+  const iris = useIris();
+  const [typed, setTyped] = useState("");
+
+  const pushToTalk = () => {
+    if (iris.state === "hidden" || iris.state === "muted") iris.wake();
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!typed.trim()) return;
+    if (iris.state === "hidden" || iris.state === "muted") iris.wake();
+    const text = typed;
+    setTyped("");
+    window.setTimeout(() => iris.handleUtterance(text), 520);
+  };
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="min-h-screen bg-background px-5 py-8">
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              Iris<span className="text-primary">.</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Wake word “{iris.wakeWord}” · push-to-talk fallback · local skills
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={pushToTalk}>Push to talk</Button>
+            <Button variant="outline" onClick={iris.stopSpeaking}>
+              Stop
+            </Button>
+            <Button variant="secondary" onClick={iris.toggleMute}>
+              {iris.state === "muted" ? "Wake" : "Sleep"}
+            </Button>
+          </div>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+          <div className="rounded-2xl border border-border bg-card/40 p-4">
+            <Avatar state={iris.state} mouth={iris.mouth} />
+            <form onSubmit={submit} className="mt-4 flex gap-2">
+              <Input
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder="Try: set a timer for 2 minutes"
+              />
+              <Button type="submit">Send</Button>
+            </form>
+          </div>
+          <Dashboard iris={iris} />
+        </div>
+      </div>
+    </main>
   );
 }
