@@ -18,7 +18,9 @@ export interface Skill {
 export interface SkillContext {
   addTimer: (label: string, seconds: number) => void;
   addNote: (text: string) => void;
+  addReminder: (text: string, dueAt: number) => void;
   notes: string[];
+  reminders: { text: string; dueAt: number; done: boolean }[];
 }
 
 const num = (word: string): number => {
@@ -52,6 +54,31 @@ export const skills: Skill[] = [
       const seconds = n * mult;
       ctx.addTimer(`${n} ${unit}${n === 1 ? "" : "s"}`, seconds);
       return { reply: `Timer set for ${n} ${unit}${n === 1 ? "" : "s"}. I'll let you know.` };
+    },
+  },
+  {
+    id: "reminders",
+    name: "Reminders",
+    description: "Persisted reminder with a due time and spoken notification.",
+    sensitivity: "safe",
+    examples: [
+      "remind me in 10 minutes to stretch",
+      "remind me in 2 hours to call the bank",
+      "set a reminder in 30 seconds to check the oven",
+    ],
+    match: (u) => {
+      const m = u.match(/remind(?:er)?(?: me)?(?: in)?\s+(\d+|\w+)\s*(second|minute|hour)s?\s*(?:to|that|about)?\s*(.*)/i);
+      return m
+        ? { amount: m[1] ?? "5", unit: m[2] ?? "minute", text: (m[3] ?? "").trim() || "your reminder" }
+        : null;
+    },
+    run: (args, ctx) => {
+      const n = num(args['amount'] ?? "5");
+      const unit = args['unit'] ?? "minute";
+      const mult = unit.startsWith("hour") ? 3600 : unit.startsWith("minute") ? 60 : 1;
+      const text = args['text'] ?? "your reminder";
+      ctx.addReminder(text, Date.now() + n * mult * 1000);
+      return { reply: `Reminder saved — I'll tell you in ${n} ${unit}${n === 1 ? "" : "s"}.` };
     },
   },
   {
