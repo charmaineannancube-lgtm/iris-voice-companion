@@ -23,7 +23,7 @@ export interface BrainInput {
 export interface BrainToolCall {
   id: string;
   name: string;
-  args: Record<string, unknown>;
+  args: Record<string, string | number | boolean>;
 }
 
 export interface BrainOutput {
@@ -119,9 +119,9 @@ export async function runBrain(input: BrainInput): Promise<BrainOutput> {
   const msg = json?.choices?.[0]?.message ?? {};
   const rawCalls: any[] = msg.tool_calls ?? [];
   const toolCalls: BrainToolCall[] = rawCalls.map((c) => {
-    let args: Record<string, unknown> = {};
+    let args: Record<string, string | number | boolean> = {};
     try {
-      args = JSON.parse(c?.function?.arguments ?? "{}");
+      args = JSON.parse(c?.function?.arguments ?? "{}") as Record<string, string | number | boolean>;
     } catch {
       args = {};
     }
