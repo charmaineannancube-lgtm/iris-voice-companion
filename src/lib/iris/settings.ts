@@ -13,6 +13,8 @@ export interface IrisSettings {
   rate: number;
   pitch: number;
   bargeIn: boolean;
+  /** minimum recent microphone peak accepted as speech */
+  noiseGate: number;
   sleepTimeoutSec: number;
   redactEmails: boolean;
   redactNumbers: boolean;
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: IrisSettings = {
   rate: 0.96,
   pitch: 0.72,
   bargeIn: true,
+  noiseGate: 0.035,
   sleepTimeoutSec: 12,
   redactEmails: true,
   redactNumbers: true,

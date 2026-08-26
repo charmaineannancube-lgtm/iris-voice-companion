@@ -185,6 +185,10 @@ export function useIris() {
   const memoriesRef = useRef<Memory[]>([]);
   const alarmsRef = useRef<Alarm[]>([]);
   const notesRef = useRef<string[]>([]);
+  const levelRef = useRef(0);
+  const lastVoiceAtRef = useRef(0);
+  const lastSpokenRef = useRef("");
+  const ttsEndedAtRef = useRef(0);
   stateRef.current = state;
   settingsRef.current = settings;
   turnsRef.current = turns;
@@ -279,6 +283,7 @@ export function useIris() {
 
   const speak = useCallback(
     (text: string) => {
+      lastSpokenRef.current = text.toLowerCase();
       setReply(text);
       setState("speaking");
       patchDiag({ tts: "speaking", lastResponse: text });
@@ -306,6 +311,7 @@ export function useIris() {
         clearInterval(mouthLoop);
         setMouth(0);
         patchDiag({ tts: "idle" });
+        ttsEndedAtRef.current = Date.now();
         log("info", "tts.end");
         if (stateRef.current === "speaking") {
           setState("listening");
@@ -491,7 +497,7 @@ export function useIris() {
     let cancelled = false;
 
     navigator.mediaDevices
-      .getUserMedia({ audio: true })
+      .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop());
@@ -511,6 +517,8 @@ export function useIris() {
           analyser.getByteTimeDomainData(buf);
           let peak = 0;
           for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
+          levelRef.current = peak;
+          if (peak >= settingsRef.current.noiseGate) lastVoiceAtRef.current = Date.now();
           patchDiag({ level: peak, micReceiving: true });
           raf = requestAnimationFrame(tick);
         };
