@@ -7,6 +7,8 @@ import { ParticleAvatar } from "@/components/iris/ParticleAvatar";
 import { useIris, pickButlerVoice } from "@/lib/iris/useIris";
 import { resetSettings } from "@/lib/iris/settings";
 import { thresholdFor } from "@/lib/iris/wake";
+import { DiagnosticsPanel } from "@/components/iris/DiagnosticsPanel";
+import { MemoryAlarmPanel } from "@/components/iris/MemoryAlarmPanel";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -114,6 +116,18 @@ function SettingsPage() {
                   <Switch checked={s.testMode} onCheckedChange={(v) => set({ testMode: v })} />
                 </div>
               </Row>
+              <Row
+                label="Background noise gate"
+                hint="Ignores audio below this microphone level. Raise it in noisy rooms."
+              >
+                <div className="flex items-center gap-3">
+                  <Slider value={[s.noiseGate]} min={0.01} max={0.2} step={0.005} onValueChange={([v]) => set({ noiseGate: v ?? 0.035 })} />
+                  <span className="w-10 text-right text-xs text-primary">{Math.round(s.noiseGate * 100)}%</span>
+                </div>
+              </Row>
+              <Row label="Owner voice lock" hint="Browser speech recognition does not expose speaker identity. Iris uses strict wake-word gating here; biometric voice enrollment is reserved for the Windows app.">
+                <span className="block text-right text-xs text-iris-dim">Windows only</span>
+              </Row>
               <Row label="Sleep timeout" hint="Seconds of silence before the avatar dissolves.">
                 <div className="flex items-center gap-3">
                   <Slider
@@ -124,29 +138,6 @@ function SettingsPage() {
                     onValueChange={([v]) => set({ sleepTimeoutSec: v ?? 12 })}
                   />
                   <span className="w-10 text-right text-xs text-primary">{s.sleepTimeoutSec}s</span>
-                </div>
-              </Row>
-            </section>
-
-            <section className="rounded-xl border border-border bg-card px-5 py-2">
-              <h2 className="py-4 text-xs uppercase tracking-[0.3em] text-iris-dim">
-                Push to talk
-              </h2>
-              <Row
-                label="Button behavior"
-                hint="Click summons Iris once. Hold keeps her awake only while the button is held. Off hides the control entirely."
-              >
-                <div className="flex gap-1">
-                  {(["click", "hold", "off"] as const).map((mode) => (
-                    <Button
-                      key={mode}
-                      size="sm"
-                      variant={s.pttMode === mode ? "default" : "outline"}
-                      onClick={() => set({ pttMode: mode })}
-                    >
-                      {mode}
-                    </Button>
-                  ))}
                 </div>
               </Row>
             </section>
@@ -225,6 +216,9 @@ function SettingsPage() {
                 </Button>
               </Row>
             </section>
+
+            <MemoryAlarmPanel iris={iris} />
+            <DiagnosticsPanel iris={iris} />
 
             <section className="rounded-xl border border-border bg-card px-5 py-2">
               <h2 className="py-4 text-xs uppercase tracking-[0.3em] text-iris-dim">
