@@ -32,10 +32,6 @@ function IrisPage() {
   const iris = useIris();
   const [typed, setTyped] = useState("");
 
-  const summon = () => {
-    if (iris.state === "hidden" || iris.state === "muted") iris.wake();
-  };
-
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!typed.trim()) return;
@@ -58,20 +54,8 @@ function IrisPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            {iris.settings.pttMode !== "off" && (
-              <Button
-                onClick={iris.settings.pttMode === "click" ? summon : undefined}
-                onPointerDown={iris.settings.pttMode === "hold" ? summon : undefined}
-                onPointerUp={iris.settings.pttMode === "hold" ? iris.toggleMute : undefined}
-              >
-                {iris.settings.pttMode === "hold" ? "Hold to talk" : "Summon"}
-              </Button>
-            )}
             <Button variant="outline" onClick={iris.stopSpeaking}>
               Stop
-            </Button>
-            <Button variant="secondary" onClick={iris.toggleMute}>
-              {iris.state === "muted" ? "Wake" : "Sleep"}
             </Button>
             <Link to="/settings">
               <Button variant="ghost">Settings</Button>

@@ -287,7 +287,7 @@ export function useIris() {
       setReply(text);
       setState("speaking");
       patchDiag({ tts: "speaking", lastResponse: text });
-      setTurns((t) => [...t, { id: uid(), role: "iris", text, at: new Date().toISOString() }].slice(-40));
+      setTurns((t) => [...t, { id: uid(), role: "iris" as const, text, at: new Date().toISOString() }].slice(-40));
       log("info", "tts.start", text);
       const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
       if (!synth) {
@@ -450,7 +450,7 @@ export function useIris() {
       if (!text) return;
       setTranscript(text);
       patchDiag({ rawTranscript: text, stt: "transcribing" });
-      setTurns((t) => [...t, { id: uid(), role: "user", text, at: new Date().toISOString() }].slice(-40));
+      setTurns((t) => [...t, { id: uid(), role: "user" as const, text, at: new Date().toISOString() }].slice(-40));
       log("info", "stt.final", text);
       void think(text, "user");
     },
@@ -561,15 +561,26 @@ export function useIris() {
       const s = settingsRef.current;
       patchDiag({ rawTranscript: heard });
 
+      // Reject ambient transcriptions and Iris's own speaker output. The Web Speech API
+      // cannot identify a speaker, so strict wake-word gating remains the identity boundary.
+      const recentlyVoiced = Date.now() - lastVoiceAtRef.current < 1200;
+      const recentlySpoke = stateRef.current === "speaking" || Date.now() - ttsEndedAtRef.current < 1400;
+      const normalizedHeard = heard.replace(/[^a-z0-9 ]/g, "").trim();
+      const normalizedOutput = lastSpokenRef.current.replace(/[^a-z0-9 ]/g, "").trim();
+      const echoedOutput = normalizedHeard.length > 5 && normalizedOutput.includes(normalizedHeard);
+      if ((!recentlyVoiced && res.isFinal) || (recentlySpoke && echoedOutput)) {
+        if (res.isFinal) log("warn", echoedOutput ? "stt.echo-rejected" : "stt.noise-rejected", heard);
+        return;
+      }
+
       if (stateRef.current === "hidden" || stateRef.current === "muted") {
         if (!res.isFinal) return;
         const { score, remainder } = scoreWake(heard, s.wakeWord);
         const threshold = thresholdFor(s.sensitivity);
         const wakeHit = score >= threshold && stateRef.current !== "muted";
-        // Hands-free: a clear sentence also opens the conversation, no button needed.
-        const handsFree =
-          stateRef.current === "hidden" && heard.trim().split(/\s+/).filter(Boolean).length >= 2;
-        const fired = wakeHit || handsFree;
+        // Hidden mode is deliberately wake-word only. Treating any sentence as a wake
+        // request caused background television and nearby voices to activate Iris.
+        const fired = wakeHit;
         if (s.testMode || fired) {
           setDetections((d) =>
             [
@@ -587,10 +598,11 @@ export function useIris() {
       }
 
       if (stateRef.current === "speaking") {
-        // Natural barge-in: any confident speech cuts Iris off mid-sentence.
+        // During TTS only explicit interruption phrases are accepted. This prevents
+        // Iris's own voice from being mistaken for natural barge-in.
         const words = heard.trim().split(/\s+/).filter(Boolean);
         const isCommand = /\b(stop|wait|hold on|shut up|quiet|enough|nevermind|never mind)\b/.test(heard);
-        if (s.bargeIn && (isCommand || words.length >= 2)) {
+        if (s.bargeIn && isCommand && words.length <= 5) {
           log("warn", "tts.bargein", heard);
           stopSpeaking();
           if (!isCommand && res.isFinal) {
@@ -680,6 +692,8 @@ export function useIris() {
   const addAlarm = (label: string, hour: number, minute: number, daily: boolean) =>
     setAlarms((a) => [...a, newAlarm(label, hour, minute, daily)]);
   const removeAlarm = (id: string) => setAlarms((a) => a.filter((x) => x.id !== id));
+  const toggleAlarm = (id: string) =>
+    setAlarms((a) => a.map((alarm) => (alarm.id === id ? { ...alarm, enabled: !alarm.enabled } : alarm)));
   const rememberFact = (text: string) => setMemories((m) => addMemory(m, text));
   const forgetFact = (id: string) => setMemories((m) => m.filter((x) => x.id !== id));
 
@@ -739,6 +753,7 @@ export function useIris() {
     cancelPending,
     addAlarm,
     removeAlarm,
+    toggleAlarm,
     rememberFact,
     forgetFact,
     clearData,

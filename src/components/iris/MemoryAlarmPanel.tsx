@@ -18,7 +18,7 @@ export function MemoryAlarmPanel({ iris }: { iris: Iris }) {
   };
   const addAlarm = () => {
     const [hour, minute] = time.split(":").map(Number);
-    iris.addAlarm(label.trim() || "Alarm", Number.isFinite(hour) ? hour : 7, Number.isFinite(minute) ? minute : 0, true);
+    iris.addAlarm(label.trim() || "Alarm", Number.isFinite(hour) ? (hour ?? 7) : 7, Number.isFinite(minute) ? (minute ?? 0) : 0, true);
   };
 
   return (
@@ -53,7 +53,7 @@ export function MemoryAlarmPanel({ iris }: { iris: Iris }) {
             {iris.alarms.length === 0 && <p className="text-xs text-muted-foreground">No alarms scheduled.</p>}
             {iris.alarms.map((alarm) => (
               <div key={alarm.id} className="flex items-center gap-2 border-b border-border/60 py-2 text-xs">
-                <button type="button" onClick={() => iris.toggleAlarm(alarm.id)} className={`h-2.5 w-2.5 rounded-full ${alarm.enabled ? "bg-primary" : "bg-muted-foreground/40"}`} aria-label={alarm.enabled ? "Disable alarm" : "Enable alarm"} title={alarm.enabled ? "Disable alarm" : "Enable alarm"} />
+                <Button size="icon" variant="ghost" onClick={() => iris.toggleAlarm(alarm.id)} className="h-7 w-7" aria-label={alarm.enabled ? "Disable alarm" : "Enable alarm"} title={alarm.enabled ? "Disable alarm" : "Enable alarm"}><span className={`h-2.5 w-2.5 rounded-full ${alarm.enabled ? "bg-primary" : "bg-muted-foreground/40"}`} /></Button>
                 <p className="min-w-0 flex-1 truncate text-foreground">{alarm.label}</p>
                 <span className="font-mono text-muted-foreground">{String(alarm.hour).padStart(2, "0")}:{String(alarm.minute).padStart(2, "0")}</span>
                 <span className="text-[10px] uppercase text-iris-dim">{alarm.daily ? "daily" : "once"}</span>

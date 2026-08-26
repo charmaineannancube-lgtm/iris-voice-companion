@@ -5,6 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { skills } from "@/lib/iris/skills";
 import { download, redactLogs, toCSV } from "@/lib/iris/redact";
 import type { useIris } from "@/lib/iris/useIris";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { MemoryAlarmPanel } from "./MemoryAlarmPanel";
 
 export function Dashboard({ iris }: { iris: ReturnType<typeof useIris> }) {
   const [showExport, setShowExport] = useState(false);
@@ -24,6 +26,8 @@ export function Dashboard({ iris }: { iris: ReturnType<typeof useIris> }) {
 
   return (
     <div className="grid gap-4">
+      <DiagnosticsPanel iris={iris} />
+      <MemoryAlarmPanel iris={iris} />
       <section className="rounded-xl border border-border bg-card p-4">
         <h2 className="mb-3 text-xs uppercase tracking-[0.3em] text-iris-dim">Conversation</h2>
         <p className="text-sm text-muted-foreground">You said</p>
